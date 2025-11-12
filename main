@@ -1,1 +1,567 @@
+clear; clc; close all;
+
+% Initialization
+try
+    [audio_orig, fs] = audioread('audiofile.wav'); % <-- REPLACE WITH YOUR FILE
+    disp('Loaded audio file successfully.');
+catch
+    disp('Could not find an audio file. Generating a test signal instead.');
+    fs = 44100; % Sample rate
+    t_end = 3;  % Duration in seconds
+    t = (0:1/fs:t_end)';
+    f_start = 440; f_end = 2000;
+    % A signal with a combination of tones and a frequency sweep (chirp)
+    sig1 = 0.4 * sin(2*pi*f_start*t);
+    sig2 = 0.3 * chirp(t, f_start, t_end, f_end, 'logarithmic');
+    audio_orig = sig1 + sig2;
+end
+
+% Ensure audio is a column vector
+audio_orig = audio_orig(:, 1);
+% Normalize original audio to have a peak amplitude of 1
+audio = audio_orig / max(abs(audio_orig));
+time = (0:length(audio)-1)'/fs;
+
+
+% =========================================================================
+% 1a. LMS Filter with WHITE NOISE
+% =========================================================================
+disp('--- Running 1a: LMS Filter with White Noise ---');
+
+% --- Signal and Noise Preparation ---
+audio = audio_orig / max(abs(audio_orig)); % Normalize
+noise_power = 0.1;
+noise_ref = noise_power * randn(size(audio)); % White noise reference
+noisy_signal = audio + noise_ref;
+
+% --- LMS Algorithm ---
+filter_order = 32;
+mu = 0.01; % Step size (learning rate)
+lms_filter = dsp.LMSFilter('Length', filter_order, 'StepSize', mu);
+[~, cleaned_signal] = lms_filter(noise_ref, noisy_signal);
+
+% --- Visualization and File Output ---
+time = (0:length(audio)-1)/fs;
+figure('Name', 'LMS Filter with White Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (White Noise)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (LMS)'); xlabel('Time (s)'); grid on;
+audiowrite('output_LMS_white_CLEANED.wav', cleaned_signal, fs);
+
+% --- Playback ---
+disp('--- Playing LMS with White Noise ---');
+disp('Playing original...'); sound(audio, fs); pause(length(audio)/fs + 1);
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% 1b. LMS Filter with COLORED NOISE
+% =========================================================================
+disp('--- Running 1b: LMS Filter with Colored Noise ---');
+
+% --- Signal and Noise Preparation ---
+audio = audio_orig / max(abs(audio_orig));
+noise_base = randn(size(audio));
+noise_ref = filter(ones(1,8)/8, 1, noise_base); % Low-pass filter to "color" it
+noise_ref = 0.2 * noise_ref / max(abs(noise_ref)); % Scale
+noisy_signal = audio + noise_ref;
+
+% --- LMS Algorithm ---
+filter_order = 32;
+mu = 0.01;
+lms_filter = dsp.LMSFilter('Length', filter_order, 'StepSize', mu);
+[~, cleaned_signal] = lms_filter(noise_ref, noisy_signal);
+
+% --- Visualization and File Output ---
+time = (0:length(audio)-1)/fs;
+figure('Name', 'LMS Filter with Colored Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (Colored Noise)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (LMS)'); xlabel('Time (s)'); grid on;
+audiowrite('output_LMS_colored_CLEANED.wav', cleaned_signal, fs);
+
+% --- Playback ---
+disp('--- Playing LMS with Colored Noise ---');
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% 1c. LMS Filter with TONAL NOISE (Hum)
+% =========================================================================
+disp('--- Running 1c: LMS Filter with Tonal Noise ---');
+
+% --- Signal and Noise Preparation ---
+audio = audio_orig / max(abs(audio_orig));
+time_vec = (0:length(audio)-1)'/fs;
+f_hum = 250; % Hum frequency in Hz
+noise_ref = 0.25 * sin(2*pi*f_hum*time_vec);
+noisy_signal = audio + noise_ref;
+
+% --- LMS Algorithm ---
+filter_order = 32;
+mu = 0.01;
+lms_filter = dsp.LMSFilter('Length', filter_order, 'StepSize', mu);
+[~, cleaned_signal] = lms_filter(noise_ref, noisy_signal);
+
+% --- Visualization and File Output ---
+time = (0:length(audio)-1)/fs;
+figure('Name', 'LMS Filter with Tonal Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (Tonal Hum)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (LMS)'); xlabel('Time (s)'); grid on;
+audiowrite('output_LMS_tonal_CLEANED.wav', cleaned_signal, fs);
+
+% --- Playback ---
+disp('--- Playing LMS with Tonal Noise ---');
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% 2a. RLS Filter with WHITE NOISE
+% =========================================================================
+disp('--- Running 2a: RLS Filter with White Noise ---');
+
+% --- Signal and Noise Preparation ---
+audio = audio_orig / max(abs(audio_orig));
+noise_power = 0.1;
+noise_ref = noise_power * randn(size(audio));
+noisy_signal = audio + noise_ref;
+
+% --- RLS Algorithm ---
+filter_order = 32;
+forgetting_factor = 0.999;
+rls_filter = dsp.RLSFilter('Length', filter_order, 'ForgettingFactor', forgetting_factor);
+[~, cleaned_signal] = rls_filter(noise_ref, noisy_signal);
+
+% --- Visualization and File Output ---
+time = (0:length(audio)-1)/fs;
+figure('Name', 'RLS Filter with White Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (White Noise)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (RLS)'); xlabel('Time (s)'); grid on;
+audiowrite('output_RLS_white_CLEANED.wav', cleaned_signal, fs);
+
+% --- Playback ---
+disp('--- Playing RLS with White Noise ---');
+disp('Playing original...'); sound(audio, fs); pause(length(audio)/fs + 1);
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% 2b. RLS Filter with COLORED NOISE 
+% =========================================================================
+disp('--- Running 2b: RLS Filter with Colored Noise ---');
+
+% --- Signal and Noise Preparation ---
+audio = audio_orig / max(abs(audio_orig));
+noise_base = randn(size(audio));
+noise_ref = filter(ones(1,8)/8, 1, noise_base);
+noise_ref = 0.2 * noise_ref / max(abs(noise_ref));
+noisy_signal = audio + noise_ref;
+
+% --- RLS Algorithm ---
+filter_order = 32;
+forgetting_factor = 0.999;
+rls_filter = dsp.RLSFilter('Length', filter_order, 'ForgettingFactor', forgetting_factor);
+[~, cleaned_signal] = rls_filter(noise_ref, noisy_signal);
+
+% --- Visualization and File Output ---
+time = (0:length(audio)-1)/fs;
+figure('Name', 'RLS Filter with Colored Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (Colored Noise)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (RLS)'); xlabel('Time (s)'); grid on;
+audiowrite('output_RLS_colored_CLEANED.wav', cleaned_signal, fs);
+% --- Playback ---
+disp('--- Playing RLS with Colored Noise ---');
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% 2c RLS Filter with Tonal Noise 
+% =========================================================================
+
+
+% Define the original, pure tonal noise
+f_hum = 250;
+noise_amplitude = 0.25;
+noise_pure = noise_amplitude * sin(2*pi*f_hum*time);
+
+% Ensure all signals are column vectors ---
+audio = audio(:);
+noise_pure = noise_pure(:);
+
+% Create a stabilized reference signal ---
+dithering_level = 1e-6;
+dithering_noise = dithering_level * randn(size(audio));
+noise_ref_stabilized = noise_pure + dithering_noise;
+
+% The noisy signal uses the original pure noise.
+% This addition is now safe because both vectors are columns.
+noisy_signal = audio + noise_pure;
+
+% --- RLS Algorithm ---
+filter_order = 32;
+forgetting_factor = 0.995;
+rls_filter = dsp.RLSFilter('Length', filter_order, 'ForgettingFactor', forgetting_factor);
+[~, cleaned_signal] = rls_filter(noise_ref_stabilized, noisy_signal);
+
+% --- Post-Processing: Normalize and Trim ---
+cleaned_signal_normalized = cleaned_signal / max(abs(cleaned_signal));
+transient_duration_sec = 0.15;
+samples_to_discard = round(transient_duration_sec * fs);
+cleaned_signal_final = cleaned_signal_normalized(samples_to_discard:end);
+
+% --- Visualization and File Output ---
+figure('Name', 'RLS Filter (Stabilized for Tonal Noise)', 'NumberTitle','off');
+subplot(3,1,1);
+plot(time, audio);
+title('Original Signal'); grid on; xlim([0 time(end)]);
+
+subplot(3,1,2);
+plot(time, noisy_signal);
+title('Noisy Signal (with Tonal Hum)'); grid on; xlim([0 time(end)]);
+
+subplot(3,1,3);
+time_final = (0:length(cleaned_signal_final)-1)' / fs;
+plot(time_final, cleaned_signal_final);
+title('Final Cleaned Signal (Stabilized, Normalized, and Trimmed)');
+xlabel('Time (s)'); grid on; xlim([0 time_final(end)]);
+
+% --- Write and Play the FINAL signal ---
+output_filename = 'output_RLS_tonal_CLEANED.wav';
+audiowrite(output_filename, cleaned_signal_final, fs);
+disp(['Final, corrected audio file saved as: ' output_filename]);
+
+% --- Playback ---
+disp('--- Playing Audio Results ---');
+disp('Playing noisy signal...');
+sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing FINAL cleaned signal...');
+sound(cleaned_signal_final, fs); pause(length(cleaned_signal_final)/fs + 1);
+
+
+% =========================================================================
+% 3a. Spectral Subtraction with WHITE NOISE
+% =========================================================================
+disp('--- Running 3a: Spectral Subtraction with White Noise ---');
+
+% --- Signal and Noise Preparation ---
+audio = audio_orig / max(abs(audio_orig));
+noise_power = 0.1;
+noise_ref = noise_power * randn(size(audio));
+noisy_signal = audio + noise_ref;
+
+% --- Spectral Subtraction Algorithm ---
+win_size = 256;
+overlap = round(0.75 * win_size);
+win = hamming(win_size, 'periodic');
+alpha = 2.0;
+spectral_floor = 0.002;
+
+noise_stft = stft(noise_ref, fs, 'Window', win, 'OverlapLength', overlap);
+noise_mag_mean = mean(abs(noise_stft), 2);
+noisy_stft = stft(noisy_signal, fs, 'Window', win, 'OverlapLength', overlap);
+noisy_mag = abs(noisy_stft);
+noisy_phase = angle(noisy_stft);
+cleaned_mag = max(noisy_mag - alpha * noise_mag_mean, spectral_floor);
+cleaned_stft = cleaned_mag .* exp(1i * noisy_phase);
+cleaned_signal_temp = istft(cleaned_stft, fs, 'Window', win, 'OverlapLength', overlap);
+
+% --- Length & Data Type  ---
+cleaned_signal = zeros(length(audio), 1);
+len_to_copy = min(length(audio), length(cleaned_signal_temp));
+cleaned_signal(1:len_to_copy) = real(cleaned_signal_temp(1:len_to_copy));
+
+% --- Visualization and File Output ---
+time = (0:length(audio)-1)/fs;
+figure('Name', 'Spectral Subtraction with White Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (White Noise)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (Spectral Subtraction)'); xlabel('Time (s)'); grid on;
+audiowrite('output_SS_white_CLEANED.wav', cleaned_signal, fs);
+
+% --- Playback ---
+disp('--- Playing Spectral Subtraction with White Noise ---');
+disp('Playing original...'); sound(audio, fs); pause(length(audio)/fs + 1);
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% 3b. Spectral Subtraction with COLORED NOISE
+% =========================================================================
+disp('--- Running 3b: Spectral Subtraction with Colored Noise ---');
+
+audio = audio_orig / max(abs(audio_orig));
+noise_base = randn(size(audio));
+noise_ref = filter(ones(1,8)/8, 1, noise_base);
+noise_ref = 0.2 * noise_ref / max(abs(noise_ref));
+noisy_signal = audio + noise_ref;
+noise_stft = stft(noise_ref, fs, 'Window', win, 'OverlapLength', overlap);
+noise_mag_mean = mean(abs(noise_stft), 2);
+noisy_stft = stft(noisy_signal, fs, 'Window', win, 'OverlapLength', overlap);
+cleaned_mag = max(abs(noisy_stft) - alpha * noise_mag_mean, spectral_floor);
+cleaned_stft = cleaned_mag .* exp(1i * angle(noisy_stft));
+cleaned_signal_temp = istft(cleaned_stft, fs, 'Window', win, 'OverlapLength', overlap);
+cleaned_signal = zeros(length(audio), 1);
+len_to_copy = min(length(audio), length(cleaned_signal_temp));
+cleaned_signal(1:len_to_copy) = real(cleaned_signal_temp(1:len_to_copy));
+
+figure('Name', 'Spectral Subtraction with Colored Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (Colored Noise)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (Spectral Subtraction)'); xlabel('Time (s)'); grid on;
+audiowrite('output_SS_colored_CLEANED.wav', cleaned_signal, fs);
+
+% --- Playback ---
+disp('--- Playing Spectral Subtraction with Colored Noise ---');
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% 3c. Spectral Subtraction with TONAL NOISE
+% =========================================================================
+disp('--- Running 3c: Spectral Subtraction with Tonal Noise ---');
+
+audio = audio_orig / max(abs(audio_orig));
+time_vec = (0:length(audio)-1)'/fs;
+f_hum = 250;
+noise_ref = 0.25 * sin(2*pi*f_hum*time_vec);
+noisy_signal = audio + noise_ref;
+noise_stft = stft(noise_ref, fs, 'Window', win, 'OverlapLength', overlap);
+noise_mag_mean = mean(abs(noise_stft), 2);
+noisy_stft = stft(noisy_signal, fs, 'Window', win, 'OverlapLength', overlap);
+cleaned_mag = max(abs(noisy_stft) - alpha * noise_mag_mean, spectral_floor);
+cleaned_stft = cleaned_mag .* exp(1i * angle(noisy_stft));
+cleaned_signal_temp = istft(cleaned_stft, fs, 'Window', win, 'OverlapLength', overlap);
+cleaned_signal = zeros(length(audio), 1);
+len_to_copy = min(length(audio), length(cleaned_signal_temp));
+cleaned_signal(1:len_to_copy) = real(cleaned_signal_temp(1:len_to_copy));
+
+figure('Name', 'Spectral Subtraction with Tonal Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on;
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (Tonal Hum)'); grid on;
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (Spectral Subtraction)'); xlabel('Time (s)'); grid on;
+audiowrite('output_SS_tonal_CLEANED.wav', cleaned_signal, fs);
+
+% --- Playback ---
+disp('--- Playing Spectral Subtraction with Tonal Noise ---');
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs);pause(length(cleaned_signal)/fs + 1);
+
+
+
+% =========================================================================
+% 4a. Wiener Filter with WHITE NOISE
+% =========================================================================
+disp('--- Running 4a: Ideal Wiener Filter with White Noise ---');
+
+% --- Signal and Noise Preparation ---
+noise_power = 0.2;
+noise_ref_white = noise_power * randn(size(audio));
+noisy_signal = audio + noise_ref_white;
+% --- Wiener Filter Algorithm
+% 1. Estimate one-sided Power Spectral Densities (PSD)
+[psd_signal, F] = pwelch(audio, [], [], [], fs, 'psd');
+psd_noise = pwelch(noise_ref_white, [], [], [], fs, 'psd');
+
+% 2. Calculate the ideal one-sided Wiener gain
+wiener_gain_one_sided = psd_signal ./ (psd_signal + psd_noise);
+
+% 3. Create the full, symmetric, two-sided filter
+N_fft = length(noisy_signal);
+noisy_fft = fft(noisy_signal);
+
+% Interpolate the gain to match the frequency points of the first half of the FFT
+H_half = interp1(F, wiener_gain_one_sided, linspace(0, fs/2, floor(N_fft/2)+1), 'linear', 'extrap');
+
+% Build the second half by mirroring the first to ensure symmetry
+if mod(N_fft, 2) == 1 % Odd length FFT
+    H_full = [H_half, fliplr(H_half(2:end))];
+else % Even length FFT
+    H_full = [H_half, fliplr(H_half(2:end-1))];
+end
+H_full(isnan(H_full)) = 0; % Replace any NaNs from extrapolation
+
+% 4. Apply the symmetric filter and invert FFT
+cleaned_fft = noisy_fft .* H_full'; % Apply filter (ensure column vector)
+cleaned_signal = real(ifft(cleaned_fft));
+
+% --- Visualization and File Output ---
+figure('Name', 'Wiener Filter with White Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on; xlim([time(1) time(end)]);
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (White Noise)'); grid on; xlim([time(1) time(end)]);
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (Wiener Filter)'); xlabel('Time (s)'); grid on; xlim([time(1) time(end)]);
+audiowrite('output_Wiener_white_CLEANED.wav', cleaned_signal/max(abs(cleaned_signal)), fs);
+
+% --- Playback ---
+disp('--- Playing Wiener Filter with White Noise ---');
+disp('Playing original...'); sound(audio, fs); pause(length(audio)/fs + 1);
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs); pause(length(cleaned_signal)/fs + 1);
+
+
+
+% =========================================================================
+% 4b. Wiener Filter with COLORED NOISE
+% =========================================================================
+disp('--- Running 4b: Ideal Wiener Filter with Colored Noise ---');
+
+% --- Signal and Noise Preparation ---
+noise_base = randn(size(audio));
+% Create colored noise by filtering white noise (low-pass in this case)
+noise_ref_colored = filter(ones(1,8)/8, 1, noise_base);
+noise_ref_colored = 0.4 * noise_ref_colored / max(abs(noise_ref_colored)); % Normalize and scale
+noisy_signal = audio + noise_ref_colored;
+
+% --- Wiener Filter Algorithm  ---
+[psd_signal, F] = pwelch(audio, [], [], [], fs, 'psd');
+psd_noise = pwelch(noise_ref_colored, [], [], [], fs, 'psd');
+wiener_gain_one_sided = psd_signal ./ (psd_signal + psd_noise);
+
+N_fft = length(noisy_signal);
+noisy_fft = fft(noisy_signal);
+H_half = interp1(F, wiener_gain_one_sided, linspace(0, fs/2, floor(N_fft/2)+1), 'linear', 'extrap');
+if mod(N_fft, 2) == 1
+    H_full = [H_half, fliplr(H_half(2:end))];
+else
+    H_full = [H_half, fliplr(H_half(2:end-1))];
+end
+H_full(isnan(H_full)) = 0;
+cleaned_fft = noisy_fft .* H_full';
+cleaned_signal = real(ifft(cleaned_fft));
+
+% --- Visualization and File Output ---
+figure('Name', 'Wiener Filter with Colored Noise');
+subplot(3,1,1); plot(time, audio); title('Original Signal'); grid on; xlim([time(1) time(end)]);
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (Colored Noise)'); grid on; xlim([time(1) time(end)]);
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (Wiener Filter)'); xlabel('Time (s)'); grid on; xlim([time(1) time(end)]);
+audiowrite('output_Wiener_colored_CLEANED.wav', cleaned_signal/max(abs(cleaned_signal)), fs);
+
+% --- Playback ---
+disp('--- Playing Wiener Filter with Colored Noise ---');
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs); pause(length(cleaned_signal)/fs + 1);
+
+
+
+% =========================================================================
+% 4c. Wiener Filter with TONAL NOISE (Hum)
+% =========================================================================
+disp('--- Running 4c: Ideal Wiener Filter with Tonal Noise ---');
+
+% --- Signal and Noise Preparation ---
+f_hum = 250;
+noise_ref_tonal = 0.3 * sin(2*pi*f_hum*time);
+
+% --- Ensure both vectors are columns before adding ---
+audio_col = audio(:);
+noise_ref_col = noise_ref_tonal(:);
+
+% This addition is now safe and performs an element-by-element sum.
+noisy_signal = audio_col + noise_ref_col;
+
+% --- Wiener Filter Algorithm (Corrected Method) ---
+[psd_signal, F] = pwelch(audio_col, [], [], [], fs, 'psd');
+psd_noise = pwelch(noise_ref_col, [], [], [], fs, 'psd');
+% Add a small epsilon to prevent potential division by zero
+wiener_gain_one_sided = psd_signal ./ (psd_signal + psd_noise + 1e-12);
+
+N_fft = length(noisy_signal);
+noisy_fft = fft(noisy_signal);
+H_half = interp1(F, wiener_gain_one_sided, linspace(0, fs/2, floor(N_fft/2)+1), 'linear', 'extrap');
+if mod(N_fft, 2) == 1
+    H_full = [H_half, fliplr(H_half(2:end))];
+else
+    H_full = [H_half, fliplr(H_half(2:end-1))];
+end
+H_full(isnan(H_full)) = 0;
+
+% Ensure FFT and Filter gain have the same orientation for element-wise multiplication
+cleaned_fft = noisy_fft(:) .* H_full(:); % Both are columns now
+cleaned_signal = real(ifft(cleaned_fft));
+
+% --- Visualization and File Output ---
+figure('Name', 'Wiener Filter with Tonal Noise');
+subplot(3,1,1); plot(time, audio_col); title('Original Signal'); grid on; xlim([time(1) time(end)]);
+subplot(3,1,2); plot(time, noisy_signal); title('Noisy Signal (Tonal Hum)'); grid on; xlim([time(1) time(end)]);
+subplot(3,1,3); plot(time, cleaned_signal); title('Cleaned Signal (Wiener Filter)'); xlabel('Time (s)'); grid on; xlim([time(1) time(end)]);
+audiowrite('output_Wiener_tonal_CLEANED.wav', cleaned_signal/max(abs(cleaned_signal)), fs);
+
+% --- Playback ---
+disp('--- Playing Wiener Filter with Tonal Noise ---');
+disp('Playing noisy...'); sound(noisy_signal, fs); pause(length(noisy_signal)/fs + 1);
+disp('Playing cleaned...'); sound(cleaned_signal, fs); pause(length(cleaned_signal)/fs + 1);
+
+
+% =========================================================================
+% MSE Comparison Across All Filters and Noise Types
+% =========================================================================
+disp('--- Computing MSE values for all cleaned signals ---');
+
+% Reload clean reference (normalized)
+audio_clean = audio_orig / max(abs(audio_orig));
+
+% --- MODIFICATION 1 (Optional but good practice) ---
+% The helper function can be removed, as the logic is clearer inside the loop.
+% compute_mse = @(ref, est) mean((ref - est(1:length(ref))).^2); % We will replace this.
+
+% Store MSE values (in same order as your processing sections)
+MSE_labels = {
+    'LMS White', 'LMS Colored', 'LMS Tonal', ...
+    'RLS White', 'RLS Colored', 'RLS Tonal', ...
+    'SS White',  'SS Colored',  'SS Tonal', ...
+    'Wiener White', 'Wiener Colored', 'Wiener Tonal'
+};
+
+% Load all cleaned outputs
+files = {
+    'output_LMS_white_CLEANED.wav', 'output_LMS_colored_CLEANED.wav', 'output_LMS_tonal_CLEANED.wav', ...
+    'output_RLS_white_CLEANED.wav', 'output_RLS_colored_CLEANED.wav', 'output_RLS_tonal_CLEANED.wav', ...
+    'output_SS_white_CLEANED.wav',  'output_SS_colored_CLEANED.wav',  'output_SS_tonal_CLEANED.wav', ...
+    'output_Wiener_white_CLEANED.wav', 'output_Wiener_colored_CLEANED.wav', 'output_Wiener_tonal_CLEANED.wav'
+};
+
+MSE_values = zeros(size(files));
+
+for i = 1:length(files)
+    if isfile(files{i})
+        [sig, ~] = audioread(files{i});
+        sig = sig / max(abs(sig)); % Normalize just in case
+        
+        % --- SOLUTION: Trim signals to the same length before comparison ---
+        
+        % 1. Find the minimum length between the reference and the current signal.
+        comparison_len = min(length(audio_clean), length(sig));
+        
+        % 2. Create trimmed versions of both signals.
+        ref_trimmed = audio_clean(1:comparison_len);
+        sig_trimmed = sig(1:comparison_len);
+        
+        % 3. Compute MSE on the perfectly aligned, same-length signals.
+        MSE_values(i) = mean((ref_trimmed - sig_trimmed).^2);
+        
+    else
+        warning('Missing output file: %s', files{i});
+        MSE_values(i) = NaN;
+    end
+end
+
+% --- Plot MSE Bar Graph ---
+figure('Name', 'MSE Comparison for All Filters');
+bar(MSE_values, 'FaceColor', [0.2 0.4 0.6]);
+xticks(1:length(MSE_labels));
+xticklabels(MSE_labels);
+xtickangle(45);
+ylabel('Mean Squared Error (MSE)');
+title('Denoising Performance Comparison');
+grid on;
+
 
